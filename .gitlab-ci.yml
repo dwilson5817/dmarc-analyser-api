@@ -34,7 +34,7 @@ upload:
   script:
     - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
         $(aws sts assume-role-with-web-identity
-          --role-arn $AWS_ROLE_ARN
+          --role-arn $ROLE_ARN
           --role-session-name GitLabCI
           --web-identity-token $AWS_TOKEN
           --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
