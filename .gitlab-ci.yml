@@ -25,7 +25,9 @@ build:
 
 upload:
   stage: upload
-  image: amazon/aws-cli
+  image:
+    name: amazon/aws-cli
+    entrypoint: [""]
   id_tokens:
     AWS_TOKEN:
       aud: https://gitlab.dylanw.dev
