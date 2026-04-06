@@ -1,0 +1,32 @@
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  image: python:3.13
+  cache:
+    key:
+      files:
+        - requirements.txt
+    paths:
+      - .pip-cache/
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  script:
+    - apt-get update && apt-get install -y zip
+    - pip install -r requirements.txt -t package/
+    - cp -r dmarc_analyser_api package/
+    - cd package && zip -r ../function.zip .
+  artifacts:
+    paths:
+      - function.zip
+
+deploy:
+  stage: deploy
+  trigger:
+    project: dmarc-analyser/cdk
+    branch: main
+    strategy: depend
+  only:
+    - main
