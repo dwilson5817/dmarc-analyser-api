@@ -39,7 +39,16 @@ upload:
           --web-identity-token $AWS_TOKEN
           --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
           --output text))
-    - aws s3 cp function.zip s3://$ARTIFACTS_BUCKET_NAME/dmarc-analyser-api/function.zip
+    - |
+      VERSION=$(aws s3api put-object \
+        --bucket $ARTIFACTS_BUCKET_NAME \
+        --key dmarc-analyser-api/function.zip \
+        --body function.zip \
+        --query VersionId --output text)
+      aws ssm put-parameter \
+        --name /dmarc-analyser/artifacts/api/version \
+        --value $VERSION \
+        --type String --overwrite
   only:
     - main
 
