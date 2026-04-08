@@ -8,8 +8,19 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import FastAPI, HTTPException, Query
 from mangum import Mangum
+from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://dmarc.dylanw.net",
+        "http://localhost:5173"
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _table = None
 
