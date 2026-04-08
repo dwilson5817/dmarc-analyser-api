@@ -54,19 +54,10 @@ def ping():
 @app.get("/domains")
 def list_domains():
     table = get_table()
-    domains = set()
-    kwargs = {
-        'FilterExpression': Attr('PK').begins_with('DOMAIN#'),
-        'ProjectionExpression': 'PK',
-    }
-    while True:
-        response = table.scan(**kwargs)
-        for item in response['Items']:
-            domains.add(item['PK'].removeprefix('DOMAIN#'))
-        if 'LastEvaluatedKey' not in response:
-            break
-        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
-    return {'domains': sorted(domains)}
+    response = table.get_item(Key={'PK': 'META', 'SK': 'DOMAINS'})
+    item = response.get('Item')
+    domains = sorted(item['domains']) if item else []
+    return {'domains': domains}
 
 
 @app.get("/domains/{domain}/reports")
