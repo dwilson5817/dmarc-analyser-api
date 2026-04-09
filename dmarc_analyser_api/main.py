@@ -12,12 +12,6 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 
-# --- Response models ---
-
-class PingResponse(BaseModel):
-    message: str
-
-
 class DomainsResponse(BaseModel):
     domains: list[str]
 
@@ -104,11 +98,6 @@ def decode_cursor(cursor: str) -> dict:
         return json.loads(base64.b64decode(cursor).decode())
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid cursor")
-
-
-@app.get("/ping", response_model=PingResponse)
-def ping():
-    return {"message": "Pong!"}
 
 
 @app.get("/domains", response_model=DomainsResponse)
