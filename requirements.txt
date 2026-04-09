@@ -1,2 +1,4 @@
 fastapi==0.135.3
 mangum==0.21.0
+pydantic==2.12.5
+starlette==1.0.0

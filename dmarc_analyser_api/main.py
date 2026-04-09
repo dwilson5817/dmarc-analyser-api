@@ -2,13 +2,62 @@ import base64
 import json
 import os
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import FastAPI, HTTPException, Query
 from mangum import Mangum
+from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
+
+
+# --- Response models ---
+
+class PingResponse(BaseModel):
+    message: str
+
+
+class DomainsResponse(BaseModel):
+    domains: list[str]
+
+
+class Report(BaseModel):
+    report_id: str
+    org_name: str
+    org_email: str
+    begin_date: int
+    end_date: int
+    policy: Literal["reject", "quarantine", "none"]
+    adkim: Literal["r", "s"]
+    aspf: Literal["r", "s"]
+    subdomain_policy: Optional[Literal["reject", "quarantine", "none"]] = None
+    pct: int
+
+
+class ReportsResponse(BaseModel):
+    items: list[Report]
+    next_cursor: Optional[str] = None
+
+
+class AuthResult(BaseModel):
+    type: Literal["dkim", "spf"]
+    result: Literal["pass", "fail", "softfail", "neutral", "none", "temperror", "permerror"]
+    domain: str
+
+
+class Record(BaseModel):
+    source_ip: str
+    count: int
+    disposition: Literal["none", "quarantine", "reject"]
+    dkim_aligned: Literal["pass", "fail"]
+    spf_aligned: Literal["pass", "fail"]
+    header_from: str
+    auth_results: list[AuthResult]
+
+
+class RecordsResponse(BaseModel):
+    items: list[Record]
 
 app = FastAPI()
 
@@ -57,12 +106,12 @@ def decode_cursor(cursor: str) -> dict:
         raise HTTPException(status_code=400, detail="Invalid cursor")
 
 
-@app.get("/ping")
+@app.get("/ping", response_model=PingResponse)
 def ping():
     return {"message": "Pong!"}
 
 
-@app.get("/domains")
+@app.get("/domains", response_model=DomainsResponse)
 def list_domains():
     table = get_table()
     response = table.get_item(Key={'PK': 'META', 'SK': 'DOMAINS'})
@@ -71,7 +120,7 @@ def list_domains():
     return {'domains': domains}
 
 
-@app.get("/domains/{domain}/reports")
+@app.get("/domains/{domain}/reports", response_model=ReportsResponse)
 def list_reports(
     domain: str,
     from_date: Optional[int] = Query(None, alias="from"),
@@ -107,7 +156,7 @@ def list_reports(
     return result
 
 
-@app.get("/domains/{domain}/reports/{report_id}")
+@app.get("/domains/{domain}/reports/{report_id}", response_model=Report)
 def get_report(domain: str, report_id: str):
     table = get_table()
     kwargs = {
@@ -124,7 +173,7 @@ def get_report(domain: str, report_id: str):
     raise HTTPException(status_code=404, detail="Report not found")
 
 
-@app.get("/domains/{domain}/reports/{report_id}/records")
+@app.get("/domains/{domain}/reports/{report_id}/records", response_model=RecordsResponse)
 def list_records(domain: str, report_id: str):
     table = get_table()
     response = table.query(
