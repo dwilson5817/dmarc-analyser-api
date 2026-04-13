@@ -2,6 +2,7 @@ import base64
 import json
 import os
 from decimal import Decimal
+from datetime import datetime
 from typing import Literal, Optional
 
 import boto3
@@ -112,28 +113,29 @@ def list_domains():
 @app.get("/domains/{domain}/reports", response_model=ReportsResponse)
 def list_reports(
     domain: str,
-    from_date: Optional[int] = Query(None, alias="from"),
-    to_date: Optional[int] = Query(None, alias="to"),
+    from_date: Optional[datetime] = Query(None, alias="from"),
+    to_date: Optional[datetime] = Query(None, alias="to"),
     limit: int = Query(50, le=100),
     cursor: Optional[str] = None,
 ):
     table = get_table()
+    from_ts = int(from_date.timestamp()) if from_date is not None else None
+    to_ts = int(to_date.timestamp()) if to_date is not None else None
+
+    if from_ts is not None and to_ts is not None:
+        sk_condition = Key('SK').between(f'REPORT#{from_ts}', f'REPORT#{to_ts}#~')
+    elif from_ts is not None:
+        sk_condition = Key('SK').gte(f'REPORT#{from_ts}')
+    elif to_ts is not None:
+        sk_condition = Key('SK').between('REPORT#', f'REPORT#{to_ts}#~')
+    else:
+        sk_condition = Key('SK').begins_with('REPORT#')
+
     kwargs = {
-        'KeyConditionExpression': Key('PK').eq(f'DOMAIN#{domain}') & Key('SK').begins_with('REPORT#'),
+        'KeyConditionExpression': Key('PK').eq(f'DOMAIN#{domain}') & sk_condition,
         'Limit': limit,
         'ScanIndexForward': False,
     }
-
-    filter_parts = []
-    if from_date is not None:
-        filter_parts.append(Attr('begin_date').gte(from_date))
-    if to_date is not None:
-        filter_parts.append(Attr('begin_date').lte(to_date))
-    if filter_parts:
-        fe = filter_parts[0]
-        for part in filter_parts[1:]:
-            fe = fe & part
-        kwargs['FilterExpression'] = fe
 
     if cursor:
         kwargs['ExclusiveStartKey'] = decode_cursor(cursor)
