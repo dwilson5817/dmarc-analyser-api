@@ -8,7 +8,7 @@ DMARC Analyser is an AWS Lambda-based DMARC report ingestion pipeline.  The API 
 Lambda and API Gateway, available at [api.dmarc.dylanw.net](https://api.dmarc.dylanw.net).
 
 It exposes endpoints to query the DMARC reports and records stored in DynamoDB, and is protected by a Lambda authorizer
-that validates GitLab OAuth tokens.
+that validates OAuth tokens.
 
 ## Development
 
@@ -26,18 +26,18 @@ Install the dependencies:
 pip install -r api_handler/requirements.txt
 ```
 
-### GitLab Authorizer
+### Lambda Authorizer
 
 The following environment variables are required:
 
-| Variable      | Description              |
-|---------------|--------------------------|
-| `GITLAB_URL`  | The base URL of GitLab   |
+| Variable        | Description                              |
+|-----------------|------------------------------------------|
+| `USERINFO_URL`  | The URL of the OIDC userinfo endpoint    |
 
 Install the dependencies:
 
 ```bash
-pip install -r gitlab_authorizer/requirements.txt
+pip install -r lambda_authorizer/requirements.txt
 ```
 
 ## Deployment
