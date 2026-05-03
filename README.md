@@ -7,7 +7,7 @@
 DMARC Analyser is an AWS Lambda-based DMARC report ingestion pipeline.  The API is a FastAPI application served via
 Lambda and API Gateway, available at [api.dmarc.dylanw.net](https://api.dmarc.dylanw.net).
 
-It exposes endpoints to query the DMARC reports and records stored in DynamoDB, and is protected by a Lambda authorizer
+It exposes endpoints to query the DMARC reports and records stored in DynamoDB, and is protected by an API authorizer
 that validates OAuth tokens.
 
 ## Development
@@ -26,7 +26,7 @@ Install the dependencies:
 pip install -r api_handler/requirements.txt
 ```
 
-### Lambda Authorizer
+### API Authorizer
 
 The following environment variables are required:
 
@@ -37,7 +37,7 @@ The following environment variables are required:
 Install the dependencies:
 
 ```bash
-pip install -r lambda_authorizer/requirements.txt
+pip install -r api_authorizer/requirements.txt
 ```
 
 ## Deployment
