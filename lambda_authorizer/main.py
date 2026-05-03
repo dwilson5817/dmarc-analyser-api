@@ -3,7 +3,7 @@ import os
 import urllib.error
 import urllib.request
 
-GITLAB_URL = os.environ['GITLAB_URL']
+USERINFO_URL = os.environ['USERINFO_URL']
 
 def handler(event, context):
     token = event.get('authorizationToken', '')
@@ -20,7 +20,7 @@ def handler(event, context):
 
     try:
         req = urllib.request.Request(
-            f'{GITLAB_URL}/oauth/userinfo',
+            USERINFO_URL,
             headers={'Authorization': f'Bearer {token}'}
         )
         with urllib.request.urlopen(req) as r:
