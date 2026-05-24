@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal, Optional
 
 import boto3
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from fastapi import FastAPI, HTTPException, Query
 from mangum import Mangum
 from pydantic import BaseModel
@@ -147,28 +147,23 @@ def list_reports(
     return result
 
 
-@app.get("/domains/{domain}/reports/{report_id}", response_model=Report)
-def get_report(domain: str, report_id: str):
+@app.get("/domains/{domain}/reports/{org_name}/{begin_date}/{report_id}", response_model=Report)
+def get_report(domain: str, org_name: str, begin_date: int, report_id: str):
     table = get_table()
-    kwargs = {
-        'KeyConditionExpression': Key('PK').eq(f'DOMAIN#{domain}') & Key('SK').begins_with('REPORT#'),
-        'FilterExpression': Attr('report_id').eq(report_id),
-    }
-    while True:
-        response = table.query(**kwargs)
-        if response['Items']:
-            return strip_keys(convert_decimals(response['Items'][0]))
-        if 'LastEvaluatedKey' not in response:
-            break
-        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
-    raise HTTPException(status_code=404, detail="Report not found")
+    response = table.get_item(
+        Key={'PK': f'DOMAIN#{domain}', 'SK': f'REPORT#{begin_date}#{org_name}#{report_id}'}
+    )
+    item = response.get('Item')
+    if item is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return strip_keys(convert_decimals(item))
 
 
-@app.get("/domains/{domain}/reports/{report_id}/records", response_model=RecordsResponse)
-def list_records(domain: str, report_id: str):
+@app.get("/domains/{domain}/reports/{org_name}/{begin_date}/{report_id}/records", response_model=RecordsResponse)
+def list_records(domain: str, org_name: str, begin_date: int, report_id: str):
     table = get_table()
     response = table.query(
-        KeyConditionExpression=Key('PK').eq(f'REPORT#{report_id}') & Key('SK').begins_with('RECORD#'),
+        KeyConditionExpression=Key('PK').eq(f'REPORT#{begin_date}#{org_name}#{report_id}') & Key('SK').begins_with('RECORD#'),
     )
     return {'items': [strip_keys(convert_decimals(item)) for item in response['Items']]}
 
