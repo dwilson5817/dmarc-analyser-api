@@ -53,6 +53,24 @@ class Record(BaseModel):
 
 class RecordsResponse(BaseModel):
     items: list[Record]
+    next_cursor: Optional[str] = None
+
+
+class StatsByDate(BaseModel):
+    date: str
+    passed: int
+    failed: int
+
+
+class StatsByDomain(BaseModel):
+    domain: str
+    reports: int
+
+
+class StatsResponse(BaseModel):
+    by_date: list[StatsByDate]
+    by_domain: list[StatsByDomain]
+
 
 app = FastAPI()
 
@@ -160,12 +178,94 @@ def get_report(domain: str, org_name: str, begin_date: int, report_id: str):
 
 
 @app.get("/domains/{domain}/reports/{org_name}/{begin_date}/{report_id}/records", response_model=RecordsResponse)
-def list_records(domain: str, org_name: str, begin_date: int, report_id: str):
+def list_records(domain: str, org_name: str, begin_date: int, report_id: str, limit: int = Query(50, le=100), cursor: Optional[str] = None):
     table = get_table()
-    response = table.query(
-        KeyConditionExpression=Key('PK').eq(f'REPORT#{begin_date}#{org_name}#{report_id}') & Key('SK').begins_with('RECORD#'),
+    kwargs = {
+        'KeyConditionExpression': Key('PK').eq(f'REPORT#{begin_date}#{org_name}#{report_id}') & Key('SK').begins_with('RECORD#'),
+        'Limit': limit,
+    }
+    if cursor:
+        kwargs['ExclusiveStartKey'] = decode_cursor(cursor)
+    response = table.query(**kwargs)
+    result = {'items': [strip_keys(convert_decimals(item)) for item in response['Items']]}
+    if 'LastEvaluatedKey' in response:
+        result['next_cursor'] = encode_cursor(response['LastEvaluatedKey'])
+    return result
+
+
+@app.get("/stats", response_model=StatsResponse)
+def get_stats(
+    from_date: Optional[datetime] = Query(None, alias="from"),
+    to_date: Optional[datetime] = Query(None, alias="to"),
+):
+    table = get_table()
+
+    meta = table.get_item(Key={'PK': 'META', 'SK': 'DOMAINS'})
+    domains = sorted(meta.get('Item', {}).get('domains', []))
+
+    from_ts = int(from_date.timestamp()) if from_date is not None else None
+    to_ts = int(to_date.timestamp()) if to_date is not None else None
+
+    if from_ts is not None and to_ts is not None:
+        sk_condition = Key('SK').between(f'REPORT#{from_ts}', f'REPORT#{to_ts}#~')
+    elif from_ts is not None:
+        sk_condition = Key('SK').gte(f'REPORT#{from_ts}')
+    elif to_ts is not None:
+        sk_condition = Key('SK').between('REPORT#', f'REPORT#{to_ts}#~')
+    else:
+        sk_condition = Key('SK').begins_with('REPORT#')
+
+    by_date: dict[str, dict[str, int]] = {}
+    by_domain_counts: list[dict] = []
+
+    for domain in domains:
+        reports: list[dict] = []
+        kwargs: dict = {
+            'KeyConditionExpression': Key('PK').eq(f'DOMAIN#{domain}') & sk_condition,
+        }
+        while True:
+            resp = table.query(**kwargs)
+            reports.extend(convert_decimals(resp['Items']))
+            if 'LastEvaluatedKey' not in resp:
+                break
+            kwargs['ExclusiveStartKey'] = resp['LastEvaluatedKey']
+
+        by_domain_counts.append({'domain': domain, 'reports': len(reports)})
+
+        for report in reports:
+            begin_date = report['begin_date']
+            org_name = report['org_name']
+            report_id = report['report_id']
+            date_str = datetime.utcfromtimestamp(begin_date).strftime('%Y-%m-%d')
+
+            if date_str not in by_date:
+                by_date[date_str] = {'passed': 0, 'failed': 0}
+
+            rec_kwargs: dict = {
+                'KeyConditionExpression': Key('PK').eq(f'REPORT#{begin_date}#{org_name}#{report_id}') & Key('SK').begins_with('RECORD#'),
+            }
+            while True:
+                rec_resp = table.query(**rec_kwargs)
+                for rec in convert_decimals(rec_resp['Items']):
+                    if rec['dkim_aligned'] == 'pass' or rec['spf_aligned'] == 'pass':
+                        by_date[date_str]['passed'] += rec['count']
+                    else:
+                        by_date[date_str]['failed'] += rec['count']
+                if 'LastEvaluatedKey' not in rec_resp:
+                    break
+                rec_kwargs['ExclusiveStartKey'] = rec_resp['LastEvaluatedKey']
+
+    by_date_list = [
+        {'date': date, 'passed': counts['passed'], 'failed': counts['failed']}
+        for date, counts in sorted(by_date.items())
+    ]
+    by_domain_list = sorted(
+        [d for d in by_domain_counts if d['reports'] > 0],
+        key=lambda x: x['reports'],
+        reverse=True,
     )
-    return {'items': [strip_keys(convert_decimals(item)) for item in response['Items']]}
+
+    return {'by_date': by_date_list, 'by_domain': by_domain_list}
 
 
 handler = Mangum(app)
